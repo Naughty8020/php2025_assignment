@@ -1,5 +1,5 @@
 <?php
-$pdo = new PDO("mysql:host=localhost;dbname=library;charset=utf8mb4", "root", "", [
+$pdo = new PDO("mysql:host=db;dbname=library;charset=utf8mb4", "root", "password", [
     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 ]);

@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  app:
+    image: php:8.3-apache
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www/html
+    # ↓ ここから追加
+    command: >
+      sh -c "docker-php-ext-install pdo_mysql 
+      && apache2-foreground"
+    # ↑ ここまで
+    depends_on:
+      - db
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+    volumes:
+      - db_data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: db
+    depends_on:
+      - db
+
+volumes:
+  db_data:

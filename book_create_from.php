@@ -1,9 +1,9 @@
 <?php
 // DB接続
-$host = 'localhost';
+$host = 'db';
 $db   = 'library';
 $user = 'root';
-$pass = '';
+$pass = 'password';
 $charset = 'utf8mb4';
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
 $options = [
