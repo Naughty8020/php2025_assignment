@@ -1,45 +1,44 @@
 <?php
-$pdo = new PDO("mysql:host=db;dbname=library;charset=utf8mb4", "root", "password", [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-]);
+require_once 'Database.php';
 
-// 30日経過した貸出記録を自動削除
+$db  = Database::getInstance();
+$pdo = $db->getConnection();
+
+/* 30日経過した貸出記録を自動削除 */
 $pdo->exec("
     DELETE FROM borrow_records
     WHERE return_date < DATE_SUB(CURDATE(), INTERVAL 30 DAY)
 ");
 
-// 検索キーワード
+/* 検索キーワード */
 $keyword = $_GET['keyword'] ?? '';
 
-// 返却処理
+/* 返却処理 */
 if (isset($_GET['return_book_id'])) {
     $book_id = (int)$_GET['return_book_id'];
+
     $pdo->prepare("UPDATE books SET status = 'available' WHERE id = ?")
         ->execute([$book_id]);
-    header("Location: book_list.php");
+
+    header("Location: index.php");
     exit;
 }
 
-
-// 📌 本の削除処理
+/* 本の削除処理 */
 if (isset($_GET['delete_book_id'])) {
     $book_id = (int)$_GET['delete_book_id'];
 
-    // 紐づく貸出記録を先に削除
     $pdo->prepare("DELETE FROM borrow_records WHERE book_id = ?")
         ->execute([$book_id]);
 
-    // 本を削除
     $pdo->prepare("DELETE FROM books WHERE id = ?")
         ->execute([$book_id]);
 
-    header("Location: book_list.php");
+    header("Location: index.php");
     exit;
 }
 
-// 本一覧（検索対応）
+/* 本一覧（検索対応） */
 if ($keyword !== '') {
     $stmt = $pdo->prepare("
         SELECT * FROM books
@@ -55,9 +54,9 @@ if ($keyword !== '') {
     ")->fetchAll();
 }
 
-// 最近の貸出記録（3件）
+/* 最近の貸出記録（3件） */
 $records = $pdo->query("
-    SELECT br.*, b.title
+    SELECT br.id, b.title, br.borrower_name, br.borrow_date, br.return_date
     FROM borrow_records br
     JOIN books b ON br.book_id = b.id
     ORDER BY br.id DESC
@@ -85,7 +84,7 @@ $records = $pdo->query("
         <input
             type="text"
             name="keyword"
-            value="<?= htmlspecialchars($keyword) ?>"
+            value="<?= htmlspecialchars($keyword, ENT_QUOTES, 'UTF-8') ?>"
             placeholder="タイトルで検索"
             class="flex-1 border rounded px-3 py-2"
         >
@@ -108,33 +107,33 @@ $records = $pdo->query("
         <?php foreach ($books as $book): ?>
             <tr>
                 <td class="px-4 py-2 border-b"><?= $book['id'] ?></td>
-                <td class="px-4 py-2 border-b"><?= htmlspecialchars($book['title']) ?></td>
+                <td class="px-4 py-2 border-b">
+                    <?= htmlspecialchars($book['title'], ENT_QUOTES, 'UTF-8') ?>
+                </td>
                 <td class="px-4 py-2 border-b">
                     <?= $book['status'] === 'available' ? '貸出可能' : '貸出中' ?>
                 </td>
-               
+                <td class="px-4 py-2 border-b">
+                    <div class="grid grid-cols-2 gap-1">
+                        <?php if ($book['status'] === 'available'): ?>
+                            <a href="borrow_form.php?book_id=<?= $book['id'] ?>"
+                               class="bg-blue-500 text-white w-full px-2 py-1 rounded text-center text-sm hover:bg-blue-600">
+                                貸出
+                            </a>
+                        <?php else: ?>
+                            <a href="?return_book_id=<?= $book['id'] ?>"
+                               class="bg-green-500 text-white w-full px-2 py-1 rounded text-center text-sm hover:bg-green-600">
+                                返却
+                            </a>
+                        <?php endif; ?>
 
-<td class="px-4 py-2 border-b">
-    <div class="grid grid-cols-2 gap-1">
-        <?php if ($book['status'] === 'available'): ?>
-            <a href="borrow_form.php?book_id=<?= $book['id'] ?>"
-               class="bg-blue-500 text-white w-full px-2 py-1 rounded text-center text-sm hover:bg-blue-600">
-                貸出
-            </a>
-        <?php else: ?>
-            <a href="?return_book_id=<?= $book['id'] ?>"
-               class="bg-green-500 text-white w-full px-2 py-1 rounded text-center text-sm hover:bg-green-600">
-                返却
-            </a>
-        <?php endif; ?>
-
-        <a href="?delete_book_id=<?= $book['id'] ?>"
-           onclick="return confirm('この本を完全に削除しますか？');"
-           class="bg-red-500 text-white w-full px-2 py-1 rounded text-center text-sm hover:bg-red-600">
-            削除
-        </a>
-    </div>
-</td>
+                        <a href="?delete_book_id=<?= $book['id'] ?>"
+                           onclick="return confirm('この本を完全に削除しますか？');"
+                           class="bg-red-500 text-white w-full px-2 py-1 rounded text-center text-sm hover:bg-red-600">
+                            削除
+                        </a>
+                    </div>
+                </td>
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -156,8 +155,12 @@ $records = $pdo->query("
         <?php foreach ($records as $r): ?>
             <tr>
                 <td class="px-4 py-2 border-b"><?= $r['id'] ?></td>
-                <td class="px-4 py-2 border-b"><?= htmlspecialchars($r['title']) ?></td>
-                <td class="px-4 py-2 border-b"><?= htmlspecialchars($r['borrower_name']) ?></td>
+                <td class="px-4 py-2 border-b">
+                    <?= htmlspecialchars($r['title'], ENT_QUOTES, 'UTF-8') ?>
+                </td>
+                <td class="px-4 py-2 border-b">
+                    <?= htmlspecialchars($r['borrower_name'], ENT_QUOTES, 'UTF-8') ?>
+                </td>
                 <td class="px-4 py-2 border-b"><?= $r['borrow_date'] ?></td>
                 <td class="px-4 py-2 border-b"><?= $r['return_date'] ?></td>
             </tr>

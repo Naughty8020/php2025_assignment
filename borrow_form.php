@@ -1,41 +1,29 @@
 <?php
-$pdo = new PDO("mysql:host=db;dbname=library;charset=utf8mb4", "root", "password", [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-]);
+require_once 'Database.php';
+$db  = Database::getInstance();
+$pdo = $db->getConnection();
 
-// GETパラメータから本情報取得
 $book_id = $_GET['book_id'] ?? 0;
-$book = $pdo->prepare("SELECT * FROM books WHERE id = ?");
-$book->execute([$book_id]);
-$book = $book->fetch();
-
+$stmt = $pdo->prepare("SELECT * FROM books WHERE id=?");
+$stmt->execute([$book_id]);
+$book = $stmt->fetch();
 if (!$book) die("本が見つかりません");
 
-// フォーム送信処理
 $message = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD']==='POST') {
     $borrower_name = $_POST['borrower_name'] ?? '';
-    $borrow_date = $_POST['borrow_date'] ?? '';
-    $return_date = $_POST['return_date'] ?? '';
+    $borrow_date   = $_POST['borrow_date'] ?? '';
+    $return_date   = $_POST['return_date'] ?? '';
 
     if ($borrower_name && $borrow_date && $return_date) {
-        // 貸出登録
-        $stmt = $pdo->prepare("INSERT INTO borrow_records (book_id, borrower_name, borrow_date, return_date) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$book_id, $borrower_name, $borrow_date, $return_date]);
-
-        // 本の状態を貸出中に更新
-        $stmt = $pdo->prepare("UPDATE books SET status = 'borrowed' WHERE id = ?");
-        $stmt->execute([$book_id]);
-
-        // ここでリダイレクト
-        header("Location: book_list.php");
-        exit; // 重要：処理をここで止める
+        $pdo->prepare("INSERT INTO borrow_records (book_id, borrower_name, borrow_date, return_date) VALUES (?,?,?,?)")
+            ->execute([$book_id,$borrower_name,$borrow_date,$return_date]);
+        $pdo->prepare("UPDATE books SET status='borrowed' WHERE id=?")->execute([$book_id]);
+        header("Location: index.php"); exit;
     } else {
-        $message = "すべての項目を入力してください。";
+        $message = "すべての項目を入力してください";
     }
 }
-
 ?>
 
 <!DOCTYPE html>
@@ -44,32 +32,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta charset="UTF-8">
 <title>貸出登録</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<style>
+/* メインコンテンツをスライドバーに合わせて調整 */
+.main-content {
+  transition: margin-left 0.3s;
+  margin-left: 0; /* 初期はサイドバー閉じている状態 */
+}
+
+/* sidebar.php 側で開閉時に body に class 追加する場合はここで調整可能 */
+body.sidebar-open .main-content {
+  margin-left: 220px; /* サイドバー幅分だけ右にずらす */
+}
+</style>
 </head>
-<body class="bg-gray-100 p-6">
-<div class="max-w-xl mx-auto bg-white p-6 rounded shadow">
-    <h1 class="text-2xl font-bold mb-4">本の貸出登録</h1>
+<body class="bg-gray-100">
 
-    <p class="mb-4 font-medium">本: <?= htmlspecialchars($book['title']) ?></p>
+<div class="flex min-h-screen">
 
-    <?php if ($message): ?>
-        <p class="mb-4 text-green-600"><?= htmlspecialchars($message) ?></p>
-    <?php endif; ?>
+    <!-- サイドバー -->
+    <div class="w-56 bg-white shadow">
+        <?php include 'sidebar.php'; ?>
+    </div>
 
-    <form method="POST" class="space-y-4">
-        <div>
-            <label class="block mb-1 font-medium">貸出者</label>
-            <input type="text" name="borrower_name" required class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    <!-- メインコンテンツ -->
+    <div class="flex-1 p-6">
+        <div class="max-w-xl mx-auto bg-white p-6 rounded shadow">
+            <h1 class="text-2xl font-bold mb-4">貸出登録</h1>
+            <p class="mb-4">本: <?=htmlspecialchars($book['title'],ENT_QUOTES,'UTF-8')?></p>
+            <?php if($message): ?><p class="text-red-600 mb-2"><?=$message?></p><?php endif; ?>
+
+            <form method="POST" class="space-y-4">
+                <div>
+                    <label class="block mb-1">貸出者</label>
+                    <input type="text" name="borrower_name" required class="w-full border px-3 py-2 rounded">
+                </div>
+                <div>
+                    <label class="block mb-1">貸出日</label>
+                    <input type="date" name="borrow_date" value="<?=date('Y-m-d')?>" required class="w-full border px-3 py-2 rounded">
+                </div>
+                <div>
+                    <label class="block mb-1">返却期限</label>
+                    <input type="date" name="return_date" value="<?=date('Y-m-d',strtotime('+7 days'))?>" required class="w-full border px-3 py-2 rounded">
+                </div>
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded w-full hover:bg-blue-600">登録</button>
+            </form>
         </div>
-        <div>
-            <label class="block mb-1 font-medium">貸出日</label>
-            <input type="date" name="borrow_date" required class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value="<?= date('Y-m-d') ?>">
-        </div>
-        <div>
-            <label class="block mb-1 font-medium">返却期限</label>
-            <input type="date" name="return_date" required class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value="<?= date('Y-m-d', strtotime('+7 days')) ?>">
-        </div>
-        <button type="submit" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition">登録</button>
-    </form>
+    </div>
+
 </div>
+
 </body>
+
 </html>
